@@ -2,16 +2,25 @@ name: Build MnaLauncher APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
 
 permissions:
   contents: read
 
+concurrency:
+  group: mnalauncher-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Скачать код репозитория
+      - name: Скачать проект
         uses: actions/checkout@v4
 
       - name: Установить Java 17
@@ -30,18 +39,57 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Проверить структуру проекта
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for file in \
+            settings.gradle \
+            app/build.gradle \
+            app/src/main/AndroidManifest.xml
+          do
+            if [ ! -f "$file" ]; then
+              echo "::error::Отсутствует файл: $file. Загрузите распакованный проект с сохранением папок."
+              exit 1
+            fi
+          done
+
+      - name: Исправить объявление Android-плагина
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          echo "Корневой build.gradle для этой сборки:"
+          cat build.gradle
+
       - name: Установить компоненты Android SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Собрать APK
-        run: gradle --no-daemon :app:assembleDebug
-
-      - name: Подготовить файл APK
+        shell: bash
         run: |
-          mkdir -p artifacts
-          cp app/build/outputs/apk/debug/app-debug.apk artifacts/MnaLauncher-debug.apk
+          set -euo pipefail
+          gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Сохранить APK для скачивания
+      - name: Подготовить APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk \
+            artifacts/MnaLauncher-debug.apk
+
+      - name: Сохранить APK
         uses: actions/upload-artifact@v4
         with:
           name: MnaLauncher-debug
