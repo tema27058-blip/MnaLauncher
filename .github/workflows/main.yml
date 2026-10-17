@@ -22,6 +22,8 @@ jobs:
 
       - name: Настроить Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Установить Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
